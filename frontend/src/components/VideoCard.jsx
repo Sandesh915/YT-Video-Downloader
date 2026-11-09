@@ -105,3 +105,4 @@ export default function VideoCard({ videoInfo }) {
     </div>
   );
 }
+

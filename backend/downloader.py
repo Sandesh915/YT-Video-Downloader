@@ -250,3 +250,4 @@ def download_video(url: str, quality: str = "720p") -> Tuple[str, str, str]:
             raise
         logger.exception("Unexpected error during video download")
         raise DownloaderException(f"Failed to download video: {str(e)}")
+
