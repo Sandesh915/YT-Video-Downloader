@@ -1,8 +1,12 @@
+# FastAPI & Server Stack
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-yt-dlp==2025.1.26
 python-multipart==0.0.20
 pydantic==2.10.6
 starlette==0.41.3
 httpx==0.28.1
 
+# yt-dlp Video Downloader
+# To upgrade to the latest extractor fixes when YouTube/Instagram changes their player:
+#   pip install -U yt-dlp
+yt-dlp==2025.1.26

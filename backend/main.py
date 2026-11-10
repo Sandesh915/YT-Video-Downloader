@@ -2,7 +2,6 @@ import os
 import shutil
 import logging
 from typing import Literal, Optional
-from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,9 +12,13 @@ from starlette.background import BackgroundTask
 from downloader import (
     extract_video_info,
     download_video,
+    get_ffmpeg_info,
     InvalidURLError,
     VideoUnavailableError,
     PrivateVideoError,
+    RateLimitError,
+    ExtractionFailedError,
+    FFmpegNotFoundError,
     DownloaderException,
 )
 
@@ -29,7 +32,7 @@ logger = logging.getLogger("main")
 app = FastAPI(
     title="Video Downloader API",
     description="Production-ready API to fetch video metadata and download videos from YouTube, Instagram, and Facebook.",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # Enable CORS for frontend development
@@ -63,13 +66,15 @@ class VideoInfoResponse(BaseModel):
 class VideoDownloadRequest(BaseModel):
     url: str = Field(..., description="URL of the video to download")
     quality: Literal["720p", "1080p"] = Field("720p", description="Target video resolution quality")
+    start_time: Optional[str] = Field(None, description="Start timestamp (e.g. '01:30', '00:01:30', '90')")
+    end_time: Optional[str] = Field(None, description="End timestamp (e.g. '02:45', '00:02:45', '165')")
 
 
 class HealthResponse(BaseModel):
     status: str
-    timestamp: str
-    ffmpeg_installed: bool
-    supported_platforms: list[str]
+    ffmpeg: bool
+    ffmpeg_path: Optional[str] = None
+    supported_platforms: list[str] = ["YouTube", "Instagram", "Facebook"]
 
 
 def cleanup_temp_dir(path: str) -> None:
@@ -85,11 +90,11 @@ def cleanup_temp_dir(path: str) -> None:
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint indicating server and ffmpeg status."""
-    ffmpeg_available = bool(shutil.which("ffmpeg"))
+    ffmpeg_available, ffmpeg_path = get_ffmpeg_info()
     return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "ffmpeg_installed": ffmpeg_available,
+        "status": "ok",
+        "ffmpeg": ffmpeg_available,
+        "ffmpeg_path": ffmpeg_path,
         "supported_platforms": ["YouTube", "Instagram", "Facebook"]
     }
 
@@ -118,6 +123,16 @@ async def get_video_info_endpoint(payload: VideoInfoRequest):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
+    except RateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e)
+        )
+    except ExtractionFailedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)
+        )
     except DownloaderException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -135,11 +150,17 @@ async def get_video_info_endpoint(payload: VideoInfoRequest):
 async def download_video_endpoint(payload: VideoDownloadRequest):
     """
     Downloads video using yt-dlp with the specified quality (720p/1080p),
-    merges streams via ffmpeg to mp4, and returns the file as a stream.
+    optional start/end trimming, merges streams via ffmpeg to mp4,
+    and returns the file as a stream.
     Cleans up temporary directory after streaming via Starlette BackgroundTask.
     """
     try:
-        file_path, filename, temp_dir = download_video(payload.url, payload.quality)
+        file_path, filename, temp_dir = download_video(
+            url=payload.url,
+            quality=payload.quality,
+            start_time=payload.start_time,
+            end_time=payload.end_time
+        )
         
         # Return FileResponse with background task cleanup
         return FileResponse(
@@ -163,6 +184,21 @@ async def download_video_endpoint(payload: VideoDownloadRequest):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
+    except RateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e)
+        )
+    except ExtractionFailedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)
+        )
+    except FFmpegNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
     except DownloaderException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -179,4 +215,3 @@ async def download_video_endpoint(payload: VideoDownloadRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-

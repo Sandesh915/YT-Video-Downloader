@@ -7,7 +7,8 @@ import {
   ShieldCheck, 
   AlertTriangle,
   RefreshCw,
-  Video
+  Video,
+  Scissors
 } from 'lucide-react';
 
 import UrlInput from './components/UrlInput';
@@ -17,7 +18,9 @@ import Toast from './components/Toast';
 import { 
   fetchVideoInfo, 
   downloadVideoFile, 
-  checkServerHealth 
+  checkServerHealth,
+  parseTimestamp,
+  formatSecondsToTime
 } from './api';
 
 export default function App() {
@@ -25,29 +28,96 @@ export default function App() {
   const [videoInfo, setVideoInfo] = useState(null);
   const [quality, setQuality] = useState('720p');
   
-  // States
+  // Trimming states
+  const [isTrimEnabled, setIsTrimEnabled] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [trimError, setTrimError] = useState(null);
+
+  // Status & Progress states
   const [isFetchingInfo, setIsFetchingInfo] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [toast, setToast] = useState(null); // { message, type: 'error' | 'success' | 'info' }
-  const [serverStatus, setServerStatus] = useState(null); // { status, ffmpeg_installed }
+  const [serverStatus, setServerStatus] = useState(null); // { status, ffmpeg, ffmpeg_path }
 
   // Check backend server health on mount
   useEffect(() => {
     checkHealth();
   }, []);
 
+  // Validate trim inputs in real-time when changed
+  useEffect(() => {
+    if (!isTrimEnabled) {
+      setTrimError(null);
+      return;
+    }
+    // Only run live validation if the user has touched end time
+    if (endTime && endTime.trim()) {
+      validateTrimInputs();
+    } else {
+      setTrimError(null);
+    }
+  }, [isTrimEnabled, startTime, endTime, videoInfo]);
+
   const checkHealth = async () => {
     try {
       const data = await checkServerHealth();
       setServerStatus(data);
     } catch {
-      setServerStatus({ status: 'offline', ffmpeg_installed: false });
+      setServerStatus({ status: 'offline', ffmpeg: false, ffmpeg_path: null });
     }
   };
 
   const showToast = (message, type = 'error') => {
     setToast({ message, type });
+  };
+
+  // Client-side trim validation
+  const validateTrimInputs = () => {
+    if (!isTrimEnabled) return true;
+
+    if (!endTime || !endTime.trim()) {
+      const err = 'Please enter an End time (e.g. 01:30).';
+      setTrimError(err);
+      return false;
+    }
+
+    const startSec = startTime && startTime.trim() ? parseTimestamp(startTime) : 0;
+    const endSec = parseTimestamp(endTime);
+
+    if (startSec === null) {
+      const err = 'Invalid Start time format. Use MM:SS, HH:MM:SS, or seconds.';
+      setTrimError(err);
+      return false;
+    }
+
+    if (endSec === null) {
+      const err = 'Invalid End time format. Use MM:SS, HH:MM:SS, or seconds.';
+      setTrimError(err);
+      return false;
+    }
+
+    if (startSec < 0) {
+      const err = 'Start time cannot be negative.';
+      setTrimError(err);
+      return false;
+    }
+
+    if (endSec <= startSec) {
+      const err = 'End time must be strictly greater than start time.';
+      setTrimError(err);
+      return false;
+    }
+
+    if (videoInfo?.duration && endSec > videoInfo.duration) {
+      const err = `End time (${formatSecondsToTime(endSec)}) cannot exceed total duration (${formatSecondsToTime(videoInfo.duration)}).`;
+      setTrimError(err);
+      return false;
+    }
+
+    setTrimError(null);
+    return true;
   };
 
   // Fetch video metadata
@@ -59,6 +129,10 @@ export default function App() {
 
     setIsFetchingInfo(true);
     setVideoInfo(null);
+    setIsTrimEnabled(false);
+    setStartTime('');
+    setEndTime('');
+    setTrimError(null);
     setDownloadSuccess(false);
 
     try {
@@ -72,21 +146,43 @@ export default function App() {
     }
   };
 
-  // Download video
+  // Download video (full or trimmed)
   const handleDownload = async () => {
     if (!url.trim()) {
       showToast('Please enter a video URL first.', 'error');
       return;
     }
 
+    // Client-side validation before submit when trimming
+    if (isTrimEnabled) {
+      const isValid = validateTrimInputs();
+      if (!isValid) {
+        showToast(trimError || 'Please fix invalid trim timestamps.', 'error');
+        return;
+      }
+    }
+
     setIsDownloading(true);
     setDownloadSuccess(false);
 
     try {
-      const result = await downloadVideoFile(url, quality, videoInfo?.title);
+      const trimParams = isTrimEnabled
+        ? {
+            startTime: startTime && startTime.trim() ? startTime.trim() : '00:00',
+            endTime: endTime.trim(),
+          }
+        : null;
+
+      const result = await downloadVideoFile(
+        url, 
+        quality, 
+        videoInfo?.title, 
+        trimParams
+      );
+
       setDownloadSuccess(true);
       showToast(`Saved ${result.filename} to your downloads!`, 'success');
-      setTimeout(() => setDownloadSuccess(false), 4000);
+      setTimeout(() => setDownloadSuccess(false), 4500);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -105,7 +201,7 @@ export default function App() {
         <header className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-950/80 border border-indigo-700/50 text-indigo-300 text-xs font-semibold shadow-inner">
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Fast, High-Definition Media Downloader</span>
+            <span>Fast, High-Definition Media Downloader & Clipper</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
@@ -113,21 +209,21 @@ export default function App() {
           </h1>
 
           <p className="text-sm sm:text-base text-slate-400 max-w-md mx-auto">
-            Download videos from <span className="text-red-400 font-semibold">YouTube</span>,{' '}
+            Download or trim videos from <span className="text-red-400 font-semibold">YouTube</span>,{' '}
             <span className="text-pink-400 font-semibold">Instagram</span>, and{' '}
             <span className="text-blue-400 font-semibold">Facebook</span> in 720p or 1080p MP4.
           </p>
 
           {/* Server / FFmpeg status banner */}
           <div className="flex items-center justify-center gap-2 pt-1">
-            {serverStatus?.status === 'healthy' ? (
+            {serverStatus?.status === 'ok' || serverStatus?.status === 'healthy' ? (
               <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400/90 font-medium bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Backend Online
-                {serverStatus.ffmpeg_installed ? (
+                {serverStatus.ffmpeg ? (
                   <span className="text-emerald-500 font-normal">| FFmpeg Active</span>
                 ) : (
-                  <span className="text-amber-400/90 font-normal">| FFmpeg not detected</span>
+                  <span className="text-amber-400/90 font-normal">| FFmpeg Missing</span>
                 )}
               </span>
             ) : serverStatus?.status === 'offline' ? (
@@ -144,7 +240,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Card Card Wrapper */}
+        {/* Card Wrapper */}
         <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6">
           {/* Step 1: URL Input */}
           <UrlInput
@@ -152,7 +248,13 @@ export default function App() {
             setUrl={(newUrl) => {
               setUrl(newUrl);
               // Clear previous video card if user changes input
-              if (videoInfo) setVideoInfo(null);
+              if (videoInfo) {
+                setVideoInfo(null);
+                setIsTrimEnabled(false);
+                setStartTime('');
+                setEndTime('');
+                setTrimError(null);
+              }
             }}
             onFetch={handleFetchInfo}
             isLoading={isFetchingInfo}
@@ -173,10 +275,19 @@ export default function App() {
             </div>
           )}
 
-          {/* Step 2: Video Metadata Card */}
+          {/* Step 2: Video Metadata Card + Trimming Toggle */}
           {videoInfo && !isFetchingInfo && (
             <div className="animate-in fade-in zoom-in-95 duration-300">
-              <VideoCard videoInfo={videoInfo} />
+              <VideoCard 
+                videoInfo={videoInfo}
+                isTrimEnabled={isTrimEnabled}
+                setIsTrimEnabled={setIsTrimEnabled}
+                startTime={startTime}
+                setStartTime={setStartTime}
+                endTime={endTime}
+                setEndTime={setEndTime}
+                trimError={trimError}
+              />
             </div>
           )}
 
@@ -202,7 +313,11 @@ export default function App() {
               {isDownloading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>Downloading & Merging Streams ({quality})...</span>
+                  <span>
+                    {isTrimEnabled
+                      ? `Trimming & Merging Clip (${quality})...`
+                      : `Downloading & Merging Streams (${quality})...`}
+                  </span>
                 </>
               ) : downloadSuccess ? (
                 <>
@@ -211,10 +326,16 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <Download className="w-5 h-5 text-indigo-200" />
+                  {isTrimEnabled ? (
+                    <Scissors className="w-5 h-5 text-indigo-200" />
+                  ) : (
+                    <Download className="w-5 h-5 text-indigo-200" />
+                  )}
                   <span>
                     {videoInfo
-                      ? `Download Video (${quality})`
+                      ? isTrimEnabled
+                        ? `Download clip (${quality})`
+                        : `Download Video (${quality})`
                       : 'Fetch Video to Enable Download'}
                   </span>
                 </>
@@ -232,12 +353,13 @@ export default function App() {
             </div>
             <span>•</span>
             <div className="flex items-center gap-1.5">
-              <Video className="w-4 h-4 text-indigo-400" />
-              <span>Direct MP4 Browser Save</span>
+              <Scissors className="w-4 h-4 text-indigo-400" />
+              <span>Frame-accurate Video Trimming</span>
             </div>
             <span>•</span>
             <div className="flex items-center gap-1.5">
-              <span>Auto Temp-file Cleanup</span>
+              <Video className="w-4 h-4 text-indigo-400" />
+              <span>Direct MP4 Browser Save</span>
             </div>
           </div>
         </footer>
@@ -245,4 +367,3 @@ export default function App() {
     </div>
   );
 }
-
