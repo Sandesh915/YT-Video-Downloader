@@ -10,3 +10,4 @@ httpx==0.28.1
 # To upgrade to the latest extractor fixes when YouTube/Instagram changes their player:
 #   pip install -U yt-dlp
 yt-dlp==2025.1.26
+imageio-ffmpeg==0.8.1

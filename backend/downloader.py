@@ -62,7 +62,8 @@ class DownloaderException(Exception):
 
 def get_ffmpeg_info() -> Tuple[bool, Optional[str]]:
     """
-    Locates ffmpeg on system PATH or via FFMPEG_LOCATION environment variable.
+    Locates ffmpeg on system PATH, via FFMPEG_LOCATION environment variable,
+    or via bundled imageio_ffmpeg fallback.
     Returns: (is_installed: bool, resolved_path_or_location: str | None)
     """
     # 1. Check system PATH
@@ -78,8 +79,30 @@ def get_ffmpeg_info() -> Tuple[bool, Optional[str]]:
             for binary_name in ("ffmpeg.exe", "ffmpeg"):
                 cand = os.path.join(cleaned_env, binary_name)
                 if os.path.isfile(cand):
+                    if cleaned_env not in os.environ.get("PATH", ""):
+                        os.environ["PATH"] = cleaned_env + os.pathsep + os.environ.get("PATH", "")
                     return True, cand
+            if cleaned_env not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = cleaned_env + os.pathsep + os.environ.get("PATH", "")
         return True, cleaned_env
+
+    # 3. Fallback to imageio_ffmpeg if installed
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and os.path.isfile(exe):
+            d = os.path.dirname(exe)
+            std_binary = os.path.join(d, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+            if not os.path.exists(std_binary):
+                try:
+                    shutil.copyfile(exe, std_binary)
+                except Exception:
+                    pass
+            if d not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+            return True, d
+    except (ImportError, Exception):
+        pass
 
     return False, None
 
@@ -87,13 +110,13 @@ def get_ffmpeg_info() -> Tuple[bool, Optional[str]]:
 def get_base_ydl_opts() -> dict:
     """
     Common yt-dlp options required across all calls:
-    - extractor_args with android + web player clients for YouTube extraction robustness
+    - extractor_args with android + web + default player clients for YouTube extraction robustness
     - noplaylist, socket_timeout, retries
     - ffmpeg_location fallback
     - optional COOKIES_FILE or COOKIES_FROM_BROWSER
     """
     opts: Dict[str, Any] = {
-        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+        "extractor_args": {"youtube": {"player_client": ["android", "web", "default"]}},
         "noplaylist": True,
         "socket_timeout": 30,
         "retries": 3,
@@ -227,12 +250,13 @@ def classify_download_error(e: yt_dlp.utils.DownloadError) -> Exception:
     """
     msg = str(e).lower()
     
-    # 429: Rate-limiting / bot verification
+    # 429: Rate-limiting / bot verification / sign in required
     if any(k in msg for k in [
         "sign in to confirm",
         "bot",
         "confirm you're not a bot",
         "confirm you’re not a bot",
+        "please sign in",
         "http error 429",
     ]):
         return RateLimitError(
@@ -298,6 +322,7 @@ def extract_video_info(url: str) -> Dict[str, Any]:
     ydl_opts.update({
         "skip_download": True,
         "extract_flat": False,
+        "ignore_no_formats_error": True,
     })
     
     try:
