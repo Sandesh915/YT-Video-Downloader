@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import logging
 from typing import Dict, Any, Tuple, Optional
@@ -381,31 +382,80 @@ def get_format_selector(quality: str, orientation: str = "landscape") -> str:
       - 720p  → bestvideo[height<=720]+bestaudio …
       - 1080p → bestvideo[height<=1080]+bestaudio …
 
-    Portrait (9:16): uses width-based quality selector to match vertical videos
-    (e.g. YouTube Shorts, Instagram Reels) where the narrow dimension = quality value.
-      - 720p portrait  → width<=720  (~720×1280 native portrait)
-      - 1080p portrait → width<=1080 (~1080×1920 native portrait)
-    format_sort=["aspect_ratio"] makes yt-dlp prefer the most portrait-like
-    format when multiple candidates exist at the given width cap.
+    Portrait (9:16): also selects the best-quality SOURCE by height.
+    Landscape sources are center-cropped to 9:16 afterwards via ffmpeg
+    (crop_to_portrait), so we always grab the highest-quality source.
+    Natively-portrait sources (Shorts/Reels) skip the crop step.
     """
     dim = 1080 if quality == "1080p" else 720
 
-    if orientation == "portrait":
-        # Portrait: cap by width; prefer lower aspect_ratio (taller) formats
-        return (
-            f"bestvideo[width<={dim}][vcodec!*=none]+bestaudio[acodec!*=none]"
-            f"/bestvideo[width<={dim}]+bestaudio"
-            f"/best[width<={dim}]"
-            f"/best"
+    # Both orientations select by height for max source quality;
+    # portrait conversion happens in post-processing via ffmpeg.
+    return (
+        f"bestvideo[height<={dim}][vcodec!*=none]+bestaudio[acodec!*=none]"
+        f"/bestvideo[height<={dim}]+bestaudio"
+        f"/best[height<={dim}]"
+        f"/best"
+    )
+
+
+def crop_to_portrait(file_path: str, ffmpeg_path: str, out_width: int = 720, out_height: int = 1280) -> str:
+    """
+    Center-crops a landscape video to 9:16 and scales to out_width x out_height
+    (default 720x1280) using ffmpeg. Returns the path to the cropped file.
+    The original file is removed after successful encoding.
+    Raises DownloaderException on ffmpeg failure.
+    """
+    if not ffmpeg_path:
+        raise FFmpegNotFoundError("ffmpeg binary not found for portrait conversion.")
+
+    # ffmpeg_path may be a directory (e.g. imageio_ffmpeg location)
+    if os.path.isdir(ffmpeg_path):
+        candidate = os.path.join(ffmpeg_path, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+        if os.path.isfile(candidate):
+            ffmpeg_path = candidate
+
+    if not os.path.isfile(ffmpeg_path):
+        raise FFmpegNotFoundError("ffmpeg binary not found for portrait conversion.")
+
+    base, _ = os.path.splitext(file_path)
+    out_path = f"{base}_portrait_cropped.mp4"
+
+    cmd = [
+        ffmpeg_path,
+        "-y",
+        "-i", file_path,
+        "-vf", f"crop=ih*9/16:ih,scale={out_width}:{out_height}:flags=lanczos",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        out_path,
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
-    else:
-        # Landscape (default): cap by height; standard 16:9 format
-        return (
-            f"bestvideo[height<={dim}][vcodec!*=none]+bestaudio[acodec!*=none]"
-            f"/bestvideo[height<={dim}]+bestaudio"
-            f"/best[height<={dim}]"
-            f"/best"
-        )
+        if result.returncode != 0 or not os.path.isfile(out_path):
+            stderr_tail = (result.stderr or "")[-800:]
+            raise DownloaderException(f"ffmpeg portrait crop failed: {stderr_tail}")
+    except subprocess.TimeoutExpired:
+        raise DownloaderException("ffmpeg portrait crop timed out (15 min limit).")
+
+    # Remove the original landscape file, keep only the cropped one
+    try:
+        os.remove(file_path)
+    except OSError:
+        pass
+
+    return out_path
 
 
 def download_video(
@@ -519,7 +569,20 @@ def download_video(
                 
             chosen_file = downloaded_files[0]
             file_path = os.path.join(temp_dir, chosen_file)
-            
+
+            # Portrait conversion: center-crop landscape sources to 9:16
+            if orientation == "portrait":
+                src_w = info.get("width")
+                src_h = info.get("height")
+                if src_w and src_h and src_w > src_h:
+                    _, ffmpeg_bin = get_ffmpeg_info()
+                    if ffmpeg_bin:
+                        file_path = crop_to_portrait(file_path, ffmpeg_bin)
+                    else:
+                        raise FFmpegNotFoundError(
+                            "ffmpeg not found — cannot convert landscape source to 9:16."
+                        )
+
             raw_title = info.get("title") or "video"
             safe_title = re.sub(r'[\\/*?:"<>|]', "", raw_title).strip() or "video"
             ext = os.path.splitext(chosen_file)[1] or ".mp4"

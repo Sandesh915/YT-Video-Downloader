@@ -121,8 +121,7 @@ export default function OrientationSelector({ orientation, setOrientation, disab
       {/* Portrait info note */}
       {orientation === 'portrait' && (
         <p className="text-[11px] text-slate-500 leading-snug pt-0.5 pl-1">
-          <span className="text-pink-400 font-semibold">Portrait</span> selects the best vertical format available.
-          Works natively with Shorts &amp; Reels — landscape videos fall back to best available.
+          <span className="text-pink-400 font-semibold">Portrait</span> outputs true 9:16 (720×1280). Landscape sources are center-cropped; Shorts &amp; Reels pass through natively.
         </p>
       )}
     </div>
