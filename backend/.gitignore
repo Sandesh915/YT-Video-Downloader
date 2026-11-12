@@ -35,6 +35,7 @@ venv.bak/
 # Logs and databases
 *.log
 *.sqlite3
+.env
 
 # Media and temporary download files
 *.mp4
@@ -49,4 +50,3 @@ tmp/
 # OS artifacts
 .DS_Store
 Thumbs.db
-
