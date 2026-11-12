@@ -152,7 +152,7 @@ export default function VideoCard({
 
         {/* Collapsible Trim Controls */}
         {isTrimEnabled && (
-          <div className="mt-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="mt-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
             {/* Duration Hint */}
             <div className="flex flex-wrap items-center justify-between text-xs text-slate-400">
               <span className="flex items-center gap-1 font-medium text-slate-300">
@@ -213,7 +213,7 @@ export default function VideoCard({
 
             {/* Inline Error Message */}
             {trimError && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-950/50 border border-red-800/60 text-red-300 text-xs font-medium animate-in fade-in">
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-950/50 border border-red-800/60 text-red-300 text-xs font-medium">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
                 <span>{trimError}</span>
               </div>

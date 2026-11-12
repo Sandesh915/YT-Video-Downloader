@@ -37,11 +37,17 @@ const colorMap = {
     active: 'border-indigo-500 bg-indigo-500/10 text-indigo-300',
     radio: 'accent-indigo-500',
     badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+    preview: 'text-indigo-400',
+    icon: 'text-indigo-400',
+    dot: 'bg-indigo-400 shadow-indigo-400/50',
   },
   pink: {
     active: 'border-pink-500 bg-pink-500/10 text-pink-300',
     radio: 'accent-pink-500',
     badge: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+    preview: 'text-pink-400',
+    icon: 'text-pink-400',
+    dot: 'bg-pink-400 shadow-pink-400/50',
   },
 };
 
@@ -76,14 +82,14 @@ export default function OrientationSelector({ orientation, setOrientation, disab
             >
               {/* Aspect ratio visual preview */}
               <div
-                className={`transition-colors ${isActive ? `text-${color}-400` : 'text-slate-500 group-hover:text-slate-400'}`}
+                className={`transition-colors ${isActive ? colors.preview : 'text-slate-500 group-hover:text-slate-400'}`}
               >
                 {preview}
               </div>
 
               {/* Icon + Label row */}
               <div className="flex items-center gap-1.5">
-                <Icon className={`w-3.5 h-3.5 ${isActive ? `text-${color}-400` : 'text-slate-500'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? colors.icon : 'text-slate-500'}`} />
                 <span className="text-sm font-bold leading-none">{label}</span>
               </div>
 
@@ -104,7 +110,7 @@ export default function OrientationSelector({ orientation, setOrientation, disab
               {/* Active indicator dot */}
               {isActive && (
                 <span
-                  className={`absolute top-2 right-2 w-2 h-2 rounded-full bg-${color}-400 shadow-sm shadow-${color}-400/50`}
+                  className={`absolute top-2 right-2 w-2 h-2 rounded-full shadow-sm ${colors.dot}`}
                 />
               )}
             </button>

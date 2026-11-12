@@ -106,21 +106,21 @@ export default function UrlInput({
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-400">Platform:</span>
           {detectedPlatform === 'YouTube' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-950/80 text-red-300 border border-red-700/60 shadow-sm animate-in fade-in">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-950/80 text-red-300 border border-red-700/60 shadow-sm">
               <Youtube className="w-3.5 h-3.5 text-red-500" />
               YouTube
             </span>
           )}
 
           {detectedPlatform === 'Instagram' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-950/80 via-pink-950/80 to-amber-950/80 text-pink-300 border border-pink-700/60 shadow-sm animate-in fade-in">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-950/80 via-pink-950/80 to-amber-950/80 text-pink-300 border border-pink-700/60 shadow-sm">
               <Instagram className="w-3.5 h-3.5 text-pink-400" />
               Instagram
             </span>
           )}
 
           {detectedPlatform === 'Facebook' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-950/80 text-blue-300 border border-blue-700/60 shadow-sm animate-in fade-in">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-950/80 text-blue-300 border border-blue-700/60 shadow-sm">
               <Facebook className="w-3.5 h-3.5 text-blue-400" />
               Facebook
             </span>

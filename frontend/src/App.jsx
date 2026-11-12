@@ -15,7 +15,6 @@ import UrlInput from './components/UrlInput';
 import VideoCard from './components/VideoCard';
 import QualitySelector from './components/QualitySelector';
 import OrientationSelector from './components/OrientationSelector';
-import OrientationSelector from './components/OrientationSelector';
 import Toast from './components/Toast';
 import { 
   fetchVideoInfo, 
@@ -282,7 +281,7 @@ export default function App() {
 
           {/* Step 2: Video Metadata Card + Trimming Toggle */}
           {videoInfo && !isFetchingInfo && (
-            <div className="animate-in fade-in zoom-in-95 duration-300">
+            <div className="transition-opacity duration-300">
               <VideoCard 
                 videoInfo={videoInfo}
                 isTrimEnabled={isTrimEnabled}

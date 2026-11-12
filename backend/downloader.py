@@ -464,8 +464,7 @@ def download_video(
         if end_sec <= start_sec:
             raise InvalidURLError("end_time must be strictly greater than start_time.")
 
-    # Parse quality and build format selector based on orientation
-    height = 1080 if quality == "1080p" else 720
+    # Build format selector based on orientation
     format_selector = get_format_selector(quality, orientation)
     
     temp_dir = tempfile.mkdtemp(prefix="video_downloader_")

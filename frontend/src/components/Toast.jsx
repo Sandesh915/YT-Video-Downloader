@@ -16,7 +16,7 @@ export default function Toast({ toast, onClose }) {
   const isSuccess = toast.type === 'success';
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 max-w-md w-full animate-in fade-in slide-in-from-bottom-5 duration-300">
+    <div className="fixed bottom-6 right-6 z-50 max-w-md w-full">
       <div
         className={`flex items-start gap-3 p-4 rounded-xl border shadow-xl backdrop-blur-md transition-all ${
           isError
