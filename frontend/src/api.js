@@ -157,14 +157,16 @@ export async function fetchVideoInfo(url) {
  * Downloads video (full or trimmed) and triggers browser file save.
  * @param {string} url
  * @param {string} quality - '720p' or '1080p'
+ * @param {string} orientation - 'landscape' or 'portrait'
  * @param {string} videoTitle - Video title fallback
  * @param {{ startTime?: string, endTime?: string } | null} trim - Optional trim parameters
  */
-export async function downloadVideoFile(url, quality, videoTitle = 'video', trim = null) {
+export async function downloadVideoFile(url, quality, orientation = 'landscape', videoTitle = 'video', trim = null) {
   try {
     const payload = {
       url: url.trim(),
       quality,
+      orientation,
       start_time: trim?.startTime ? trim.startTime.trim() : null,
       end_time: trim?.endTime ? trim.endTime.trim() : null,
     };

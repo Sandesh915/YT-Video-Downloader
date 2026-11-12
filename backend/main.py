@@ -32,7 +32,7 @@ logger = logging.getLogger("main")
 app = FastAPI(
     title="Video Downloader API",
     description="Production-ready API to fetch video metadata and download videos from YouTube, Instagram, and Facebook.",
-    version="1.1.0"
+    version="1.2.0"
 )
 
 # Enable CORS for frontend development
@@ -66,6 +66,7 @@ class VideoInfoResponse(BaseModel):
 class VideoDownloadRequest(BaseModel):
     url: str = Field(..., description="URL of the video to download")
     quality: Literal["720p", "1080p"] = Field("720p", description="Target video resolution quality")
+    orientation: Literal["landscape", "portrait"] = Field("landscape", description="Video orientation: landscape (16:9) or portrait (9:16)")
     start_time: Optional[str] = Field(None, description="Start timestamp (e.g. '01:30', '00:01:30', '90')")
     end_time: Optional[str] = Field(None, description="End timestamp (e.g. '02:45', '00:02:45', '165')")
 
@@ -158,6 +159,7 @@ async def download_video_endpoint(payload: VideoDownloadRequest):
         file_path, filename, temp_dir = download_video(
             url=payload.url,
             quality=payload.quality,
+            orientation=payload.orientation,
             start_time=payload.start_time,
             end_time=payload.end_time
         )

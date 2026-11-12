@@ -373,9 +373,45 @@ def extract_video_info(url: str) -> Dict[str, Any]:
         raise DownloaderException(f"An unexpected error occurred: {str(e)}")
 
 
+def get_format_selector(quality: str, orientation: str = "landscape") -> str:
+    """
+    Returns a yt-dlp format selector string based on quality and orientation.
+
+    Landscape (16:9): uses height-based quality selector (standard).
+      - 720p  → bestvideo[height<=720]+bestaudio …
+      - 1080p → bestvideo[height<=1080]+bestaudio …
+
+    Portrait (9:16): uses width-based quality selector to match vertical videos
+    (e.g. YouTube Shorts, Instagram Reels) where the narrow dimension = quality value.
+      - 720p portrait  → width<=720  (~720×1280 native portrait)
+      - 1080p portrait → width<=1080 (~1080×1920 native portrait)
+    format_sort=["aspect_ratio"] makes yt-dlp prefer the most portrait-like
+    format when multiple candidates exist at the given width cap.
+    """
+    dim = 1080 if quality == "1080p" else 720
+
+    if orientation == "portrait":
+        # Portrait: cap by width; prefer lower aspect_ratio (taller) formats
+        return (
+            f"bestvideo[width<={dim}][vcodec!*=none]+bestaudio[acodec!*=none]"
+            f"/bestvideo[width<={dim}]+bestaudio"
+            f"/best[width<={dim}]"
+            f"/best"
+        )
+    else:
+        # Landscape (default): cap by height; standard 16:9 format
+        return (
+            f"bestvideo[height<={dim}][vcodec!*=none]+bestaudio[acodec!*=none]"
+            f"/bestvideo[height<={dim}]+bestaudio"
+            f"/best[height<={dim}]"
+            f"/best"
+        )
+
+
 def download_video(
     url: str,
     quality: str = "720p",
+    orientation: str = "landscape",
     start_time: Optional[str] = None,
     end_time: Optional[str] = None
 ) -> Tuple[str, str, str]:
@@ -428,9 +464,9 @@ def download_video(
         if end_sec <= start_sec:
             raise InvalidURLError("end_time must be strictly greater than start_time.")
 
-    # Parse quality height
+    # Parse quality and build format selector based on orientation
     height = 1080 if quality == "1080p" else 720
-    format_selector = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+    format_selector = get_format_selector(quality, orientation)
     
     temp_dir = tempfile.mkdtemp(prefix="video_downloader_")
     outtmpl = os.path.join(temp_dir, "%(title).150B.%(ext)s")
@@ -441,6 +477,11 @@ def download_video(
         "merge_output_format": "mp4",
         "outtmpl": outtmpl,
     })
+
+    # For portrait, sort formats by ascending aspect_ratio so the most
+    # vertical (portrait-like) format is preferred when candidates tie.
+    if orientation == "portrait":
+        ydl_opts["format_sort"] = ["aspect_ratio"]
 
     # Add trimming options if requested
     if is_trimming and end_sec is not None:
@@ -483,13 +524,14 @@ def download_video(
             raw_title = info.get("title") or "video"
             safe_title = re.sub(r'[\\/*?:"<>|]', "", raw_title).strip() or "video"
             ext = os.path.splitext(chosen_file)[1] or ".mp4"
+            orient_tag = "_portrait" if orientation == "portrait" else ""
 
             if is_trimming and end_sec is not None:
                 start_label = format_timestamp_filename(start_sec)
                 end_label = format_timestamp_filename(end_sec)
-                filename = f"{safe_title}_{start_label}-{end_label}{ext}"
+                filename = f"{safe_title}{orient_tag}_{start_label}-{end_label}{ext}"
             else:
-                filename = f"{safe_title}{ext}"
+                filename = f"{safe_title}{orient_tag}{ext}"
             
             return file_path, filename, temp_dir
             

@@ -14,6 +14,8 @@ import {
 import UrlInput from './components/UrlInput';
 import VideoCard from './components/VideoCard';
 import QualitySelector from './components/QualitySelector';
+import OrientationSelector from './components/OrientationSelector';
+import OrientationSelector from './components/OrientationSelector';
 import Toast from './components/Toast';
 import { 
   fetchVideoInfo, 
@@ -27,6 +29,7 @@ export default function App() {
   const [url, setUrl] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
   const [quality, setQuality] = useState('720p');
+  const [orientation, setOrientation] = useState('landscape'); // 'landscape' | 'portrait'
   
   // Trimming states
   const [isTrimEnabled, setIsTrimEnabled] = useState(false);
@@ -129,6 +132,7 @@ export default function App() {
 
     setIsFetchingInfo(true);
     setVideoInfo(null);
+    setOrientation('landscape');
     setIsTrimEnabled(false);
     setStartTime('');
     setEndTime('');
@@ -175,7 +179,8 @@ export default function App() {
 
       const result = await downloadVideoFile(
         url, 
-        quality, 
+        quality,
+        orientation,
         videoInfo?.title, 
         trimParams
       );
@@ -298,7 +303,14 @@ export default function App() {
             disabled={!videoInfo || isFetchingInfo || isDownloading}
           />
 
-          {/* Step 4: Download Button */}
+          {/* Step 4: Orientation Selector */}
+          <OrientationSelector
+            orientation={orientation}
+            setOrientation={setOrientation}
+            disabled={!videoInfo || isFetchingInfo || isDownloading}
+          />
+
+          {/* Step 5: Download Button */}
           <div className="pt-2">
             <button
               type="button"
